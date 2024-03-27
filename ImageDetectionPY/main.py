@@ -11,7 +11,6 @@ import time
 import torch
 torch.cuda.empty_cache()
 
-
 # Define or obtain location information
 # For example, a static location could be defined as follows:
 location_info = {
@@ -50,76 +49,75 @@ def save_metadata(metadata, unique_identifier):
     metadata_path = os.path.join(metadata_dir, f"frame_{unique_identifier}_metadata.json")
     with open(metadata_path, "w") as file:
         json.dump(metadata, file, indent=4)
- 
 
-if __name__ == '__main__':
-    camera_feed_url = "http://10.1.1.62/cgi-bin/api.cgi?cmd=Snap&channel=0&rs=wuuPhkmUCeI9WG7C&user=admin&password=ford1000"  # URL to fetch the live feed frame
-    #cap = cv2.VideoCapture(camera_feed_url)
+camera_feed_url = "http://10.1.1.93/cgi-bin/api.cgi?cmd=Snap&channel=0&rs=wuuPhkmUCeI9WG7C&user=admin&password=ford1000"  # URL to fetch the live feed frame
 
-    model = YOLO('yolov8n.pt') # pass any model type
+model = YOLO('yolov8n-oiv7.pt') # pass any model type
 
-    # Train the model on the Open Images V7 dataset
-    results = model.train(data='OpenImagesV7.yaml', epochs=50, imgsz=640, batch=8)
-    #results = model.train(data='coco128.yaml', epochs=3)
+# Export the model
+model.export(format='onnx', opset=15)
 
-    frame_count = 0
+# Train the model on the Open Images V7 dataset
+#results = model.train(data='OpenImagesV7.yaml', epochs=100, imgsz=640)
+#results = model.train(data='coco128.yaml', epochs=3)
 
-    #while cap.isOpened():
-    while True:
-        # Read a frame from the video
-        frame = fetch_frame(camera_feed_url)
-        #success, frame = cap.read()
+frame_count = 0
 
-        #if success:
-        if frame is not None:
-            # Run YOLOv8 inference on the frame
-            resized_frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_LINEAR)
+while True:
+    # Read a frame from the video
+    frame = fetch_frame(camera_feed_url)
+    #success, frame = cap.read()
 
-            # Visualize the results on the cropped frame
-            results = model(resized_frame, conf=0.1)
+    #if success:
+    if frame is not None:
+        # Run YOLOv8 inference on the frame
+        resized_frame = cv2.resize(frame, (1280, 720), interpolation=cv2.INTER_LINEAR)
 
-            # Combine the original frame with the annotated detections
-            annotated_frame = results[0].plot()
+        # Visualize the results on the cropped frame
+        results = model(resized_frame, conf=0.1)
 
-            # Save the annotated frame using the save_image function
-            unique_identifier = save_image(annotated_frame, frame_count)
+        # Combine the original frame with the annotated detections
+        annotated_frame = results[0].plot()
 
-            # Display the annotated frame
-            cv2.imshow("YOLOv8 Inference", annotated_frame)
+        # Save the annotated frame using the save_image function
+        unique_identifier = save_image(annotated_frame, frame_count)
+
+        # Display the annotated frame
+        cv2.imshow("YOLOv8 Inference", annotated_frame)
+    
+        num_objects = len(results[0].boxes)
+
+        # If there are two or more objects, save the frame and print a statement
+        if num_objects >= 0:
+            # Get the current timestamp
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Extract metadata for saving
+            metadata = {
+                "num_objects": num_objects,
+                "timestamp": current_time,
+                "location": location_info,
+                "image_path": os.path.join(images_dir, f"frame_{unique_identifier}.jpg")  # Construct the path using the unique identifier
+            }
         
-            num_objects = len(results[0].boxes)
+            print(metadata)
+    
+    
+        # Save metadata with consistent naming
+        save_metadata(metadata, unique_identifier)
+        frame_count += 1
 
-            # If there are two or more objects, save the frame and print a statement
-            if num_objects >= 0:
-                # Get the current timestamp
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Break the loop if 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
-                # Extract metadata for saving
-                metadata = {
-                    "num_objects": num_objects,
-                    "timestamp": current_time,
-                    "location": location_info,
-                    "image_path": os.path.join(images_dir, f"frame_{unique_identifier}.jpg")  # Construct the path using the unique identifier
-                }
-           
-                print(metadata)
-        
-        
-            # Save metadata with consistent naming
-            save_metadata(metadata, unique_identifier)
-            frame_count += 1
+        # Optional: Add a short delay to control the rate of frame processing
+        time.sleep(0.5)  # Adjust the sleep time as needed
+    
+    else:
+        print("Failed to fetch frame.")
+        break  # Exit the loop if unable to fetch a new frame
 
-            # Break the loop if 'q' is pressed
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-
-            # Optional: Add a short delay to control the rate of frame processing
-            time.sleep(0.5)  # Adjust the sleep time as needed
-       
-        else:
-            print("Failed to fetch frame.")
-            break  # Exit the loop if unable to fetch a new frame
-
-    # Release the video capture object and close the display window
-    #cap.release()
-    cv2.destroyAllWindows()
+# Release the video capture object and close the display window
+#cap.release()
+cv2.destroyAllWindows()
