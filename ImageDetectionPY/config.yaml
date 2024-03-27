@@ -1,0 +1,13 @@
+# Path settings
+path: E:/datasets/data # Base path to the dataset, relative paths are fine if the config is run from the same directory
+
+# Dataset settings
+train: images/train  # Path to training images
+val: images/train    # Path to validation images
+
+# Number of classes
+nc: 1
+
+# Class names
+names:
+  - airplane
